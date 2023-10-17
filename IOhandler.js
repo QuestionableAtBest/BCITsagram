@@ -8,29 +8,33 @@
  *
  */
 
-//Step 4: Send them to the grayscale function
-//Step 5: After ALL IMAGES have SUCCESSFULLY been grayscaled, show a success message.
-// ALL ERRORS MUST SHOW IN .catch in PROMISE CHAIN
-
 //Hint: do Promise.All([grayScale("img1.png"),grayScale("img2.png"),grayScale("img3.png")])
 // .then(()=>console.log("All images have been grayscaled"))
-const PNG = require("pngjs").PNG;
-const { rejects } = require("assert");
-const unzipper = require("unzipper")
-const fs = require("fs")
+const AdmZip = require("adm-zip"),
+  { pipeline } = require("stream"),
+  fs = require("fs"),
+  PNG = require("pngjs").PNG,
+  path = require("path");
 
-function handleGrayscale(){
-  for (var y = 0; y < this.height; y++) {
-    for (var x = 0; x < this.width; x++) {
-      var idx = (this.width * y + x) << 2;
-      // invert color CHANGE THIS TO GRAYSCALE
-      this.data[idx] = 255 - this.data[idx];
-      this.data[idx + 1] = 255 - this.data[idx + 1];
-      this.data[idx + 2] = 255 - this.data[idx + 2];
+const handleGrayscale = (image) => {
+  return new Promise((resolve, reject) => {
+    for (let y = 0; y < image.height; y++) {
+      for (let x = 0; x < image.width; x++) {
+        const idx = (image.width * y + x) << 2;
+
+        const red = image.data[idx];
+        const green = image.data[idx + 1];
+        const blue = image.data[idx + 2];
+        const gray = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+
+        image.data[idx] = gray;
+        image.data[idx + 1] = gray;
+        image.data[idx + 2] = gray;
+      }
     }
-  }
-  return this;
-}
+    resolve(image);
+  });
+};
 /**
  * Description: decompress file from given pathIn, write to given pathOut
  *
@@ -41,12 +45,11 @@ function handleGrayscale(){
 const unzip = (pathIn, pathOut) => {
   //Step 1: Read zip file
   //Step 2: Unzip the zip file
-  return new Promise((resolve,rejects) =>{
-      fs.createReadStream(pathIn)
-      .pipe(unzipper.Extract({path:pathOut}))
-      .on("end", () => resolve())
-      .on("error", (err) => reject(err))
-    })
+  return new Promise((resolve, reject) => {
+    const zip = new AdmZip(pathIn);
+    zip.extractAllTo(pathOut, true);
+    resolve("Successfully unzipped");
+  });
 };
 
 /**
@@ -57,15 +60,16 @@ const unzip = (pathIn, pathOut) => {
  */
 const readDir = (dir) => {
   //Step 3: Read all png images from unzipped folder
-  // return new Promise((resolve,rejects) =>{
-    fs.readdir(dir, (err,files) =>{
-      console.log(files)
-      if(err) rejects(err);
-      else{
-        resolve(files);
+  return new Promise((resolve, reject) => {
+    fs.readdir(dir, (err, files) => {
+      if (err) {
+        reject(err);
+      } else {
+        const pngFiles = files.filter((file) => path.extname(file) === ".png");
+        resolve(pngFiles);
       }
-    })
-  // })
+    });
+  });
 };
 
 /**
@@ -76,16 +80,28 @@ const readDir = (dir) => {
  * @param {string} pathProcessed
  * @return {promise}
  */
+
+//Step 4: Send them to the grayscale function
+//Step 5: After ALL IMAGES have SUCCESSFULLY been grayscaled, show a success message.
+// ALL ERRORS MUST SHOW IN .catch in PROMISE CHAIN
 const grayScale = (pathIn, pathOut) => {
-  //Pipeline method
-  const readStream = fs.createReadStream(pathIn);
-  const writeStream = fs.createWriteStream(pathOut);
-  const pngStream = new PNG({}).on("parsed",() => {
-    const modifiedImage = handleGrayscale();
-    modifiedImage.pack()
+  return new Promise((resolve, reject) => {
+    const readStream = fs.createReadStream(pathIn);
+    const writeStream = fs.createWriteStream(pathOut);
+    const pngStream = new PNG().on("parsed", function () {
+      handleGrayscale(this);
+      this.pack().pipe(writeStream)
+      .on('error',(err)=>reject(err));
+    });
+
+    pipeline(readStream, pngStream, function onEnd(err) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve("Successfully Grayscaled");
+      }
+    });
   });
-  //this works, can do pipe .on error handling, or use pipeline (try pipeline)
-  readStream.pipe(pngStream).pipe(writeStream);
 };
 
 module.exports = {

@@ -15,7 +15,16 @@ const pathUnzipped = path.join(__dirname, "unzipped");
 const pathProcessed = path.join(__dirname, "grayscaled");
 
 IOhandler.unzip(zipFilePath, pathUnzipped)
-.then(()=>{IOhandler.readDir(pathUnzipped)})
-// .then(()=>IOhandler.grayScale())
-.catch((err) => console.log(err));
-
+  .then((msg) => {
+    console.log(msg);
+  })
+  .then(() => {
+    return IOhandler.readDir(pathUnzipped);
+  })
+  .then((imgs) => {
+    Promise.all(imgs.map((img) => IOhandler.grayScale(pathUnzipped + "/" + img,pathProcessed + "/" + img)));
+  })
+  .then(() => {
+    console.log("Successfully Grayscaled");
+  })
+  .catch(() => console.log("An error has occured"));
